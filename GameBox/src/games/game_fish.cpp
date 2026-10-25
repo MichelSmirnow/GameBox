@@ -18,6 +18,7 @@
 #include "../core/ui.h"
 #include "../core/storage.h"
 #include "../gfx/gfx.h"
+#include "../gfx/gfx_their.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -98,6 +99,9 @@ uint32_t rodCost(uint8_t lvl) {                 // цена улучшения �
   return (uint32_t)c;
 }
 float rodLuck(uint8_t lvl) { return 1.0f + (lvl - 1) * 0.35f; }
+uint32_t boatLuckCost(uint8_t lvl) {          // удача лодок дешевле удочки
+  return (uint32_t)(rodCost(lvl) * 0.6);
+}
 
 struct BoatDef {
   const char* name;
@@ -109,13 +113,13 @@ struct BoatDef {
 const uint8_t kBoatCount = 8;
 const BoatDef kBoat[kBoatCount] = {
   {"Плот",             0,          1.0f,  1, 0},
-  {"Надувная лодка",   2500,       1.6f,  1, 1},
+  {"Надувная",         2500,       1.6f,  1, 1},
   {"Моторка",          30000,      2.5f,  2, 2},
   {"Парусник",         450000,     4.0f,  3, 3},
-  {"Катер «Бриз»",     6000000,    6.5f,  5, 4},
-  {"Яхта «Улов»",      90000000,   10.0f, 8, 5},
+  {"Катер",            6000000,    6.5f,  5, 4},
+  {"Яхта",             90000000,   10.0f, 8, 5},
   {"Траулер",          1500000000, 16.0f, 12, 6},
-  {"Катамаран «Глубина»", 30000000000.0, 25.0f, 20, 7},
+  {"Катамаран",        30000000000.0, 25.0f, 20, 7},
 };
 
 struct ZoneDef {
@@ -172,6 +176,7 @@ struct FishState {
   uint8_t rod = 1;
   uint8_t zone = 0;
   uint8_t boats = 0x01;      // маска купленных
+  uint8_t boatLuck = 1;      // прокачка удачи лодок (отдельно от удочки)
   uint8_t activeBoat = 0;
   uint8_t prestige = 0;
   uint16_t inv[FISH_COUNT];
@@ -198,6 +203,7 @@ class GameFish : public Game {
  public:
   const char* title() const override { return "Симулятор рыбалки"; }
   const char* shortName() const override { return "Рыбалка"; }
+  const Bmp* cover() const override { return &bmpTheirMenu1; }
   const Bmp& banner() const override { return bmpBannerFish; }
   uint8_t tabs() const override { return 6; }
 
@@ -209,7 +215,7 @@ class GameFish : public Game {
   uint8_t vpages(uint8_t t) const override {
     switch (t) {
       case 0: return 2;                 // ловля / прокачка
-      case 1: return kBoatCount;        // по лодке на страницу
+      case 1: return kBoatCount + 1;    // по лодке на страницу + прокачка удачи
       case 4: return kZoneCount;        // по зоне на страницу
       default: return 1;
     }
@@ -238,13 +244,13 @@ class GameFish : public Game {
       else if (e == EV_BACK || e == EV_STICK) catMenu = false;
       return;
     }
+    // Табло (деньги, рыба, эффекты) — с любой страницы, кнопкой СБРОС
+    // СБРОС — табло (переключатель), любая другая кнопка его закрывает
+    if (stickBoard) { stickBoard = false; if (e != EV_RESET) return; }
+    if (e == EV_RESET) { stickBoard = true; return; }
     if (e == EV_STICK) {
-      if (tab == 0) { stickBoard = true; return; }
-      if (tab == 2) { sellAll(); return; }
-      if (tab == 3) { catMenu = true; catSel = potCat; return; }
-    }
-    if (e == EV_RESET) {
-      if (tab == 0) { s.fishPhase = 0; }   // отменить заброс
+      if (tab == 2) { sellAll(); return; }                       // холодильник: продать всё
+      if (tab == 3) { catMenu = true; catSel = potCat; return; } // зелья: категории
       return;
     }
     switch (tab) {
@@ -267,8 +273,6 @@ class GameFish : public Game {
         if (i == 1) s.effLuck = 1;
         if (i == 2) s.effSell = 1;
       }
-    // табло видно только пока кнопка стика удерживается
-    if (stickBoard && !gbBtnHeld(BTN_STICK)) stickBoard = false;
     // автоловля лодкой: тик раз в 1.8 c (ускоряется зельями)
     uint32_t tick = (uint32_t)(1800.0f / totalHaste());
     if (tick < 300) tick = 300;
@@ -317,12 +321,14 @@ class GameFish : public Game {
     return
       "РЫБАЛКА (удочка)\n"
       "ВЫБОР — забросить. Когда\nпоплавок дёрнется, ВЫБОР\nснова — подсечь.\n"
-      "СТИК — табло: деньги,\nрыба, эффекты.\n"
+      "СБРОС — табло: деньги,\nрыба, эффекты (с любой\nстраницы).\n"
       "Джойстик вниз — прокачка\nудочки, влево/вправо —\nдругие вкладки.\n\n"
       "ЛОДКИ\n"
       "Лодки рыбачат сами, пока\nигра открыта. Вверх/вниз —\nвыбрать лодку, ВЫБОР —\nкупить. Цена растёт, как и\nудача с уловом.\n\n"
       "ХОЛОДИЛЬНИК\n"
       "Вверх/вниз — вид рыбы,\nВЫБОР — продать вид,\nСТИК — продать всю рыбу.\n\n"
+      "УДАЧА\n"
+      "Удочка и лодки качаются\nотдельно: на последней\nстранице «ЛОДКИ» — удача\nлодок. Удочка в той же\nзоне ловит лучше всегда.\n\n"
       "ЗЕЛЬЯ\n"
       "Вверх/вниз — зелье,\nВЫБОР — варить и сразу\nприменять, СТИК — выбор\nкатегории. Эффекты\nскладываются по времени.\n\n"
       "ЗОНЫ\n"
@@ -348,8 +354,26 @@ class GameFish : public Game {
 
   // ------------------------------------------------------------------ утиль
   float totalHaste() const { return s.effHaste * (1.0f + s.prestige * 0.1f); }
-  float totalLuck() const {
-    return (rodLuck(s.rod) + kBoat[s.activeBoat].luck - 1.0f) * s.effLuck * kZone[s.zone].luck;
+  // Общая удача: зелья, престиж и зона — действуют и на удочку, и на лодки.
+  float commonLuck() const { return s.effLuck * kZone[s.zone].luck * (1.0f + s.prestige * 0.1f); }
+  // Удача удочки — своя прокачка (вкладка «УДОЧКА»).
+  float rodQuality() const { return rodLuck(s.rod); }
+  // Удача лодок — ОТДЕЛЬНАЯ прокачка (вкладка «ЛОДКИ», последняя страница).
+  // Она не наследует удачу удочки и всегда ниже: удочка в той же зоне ловит
+  // более редкую рыбу, лодки берут количеством.
+  float boatQuality() const {
+    float own = 1.0f + (s.boatLuck > 0 ? (s.boatLuck - 1) * 0.25f : 0.0f);
+    float cap = rodQuality() * 0.75f;
+    return own < cap ? own : cap;
+  }
+  float totalLuck() const { return rodQuality() * commonLuck(); }
+  float totalBoatLuck() const { return boatQuality() * commonLuck(); }
+
+  // Спрайт рыбы: 38 видов — графика автора, новые виды — мои спрайты
+  static const Bmp& fishArt(uint8_t id) {
+    uint8_t sp = kFish[id].sprite;
+    if (sp < 38) return theirFish[sp];
+    return fishSprites[sp];
   }
   float sellMult() const { return (1.0f + s.prestige * 0.5f) * s.effSell; }
   double fishPrice(uint8_t id) const { return kFish[id].price * sellMult(); }
@@ -371,6 +395,9 @@ class GameFish : public Game {
     s.zone = fishStore.getU8("zone", 0);
     s.boats = fishStore.getU8("boats", 1);
     s.activeBoat = fishStore.getU8("aboat", 0);
+    s.boatLuck = fishStore.getU8("bluck", 1);
+    if (s.boatLuck < 1) s.boatLuck = 1;
+    if (s.boatLuck > kRodMax) s.boatLuck = kRodMax;
     s.prestige = fishStore.getU8("prest", 0);
     s.totalCaught = fishStore.getU32("tc", 0);
     fishStore.getBytes("inv", s.inv, sizeof(s.inv));
@@ -387,6 +414,7 @@ class GameFish : public Game {
     fishStore.setU8("zone", s.zone);
     fishStore.setU8("boats", s.boats);
     fishStore.setU8("aboat", s.activeBoat);
+    fishStore.setU8("bluck", s.boatLuck);
     fishStore.setU8("prest", s.prestige);
     fishStore.setU32("tc", s.totalCaught);
     fishStore.setBytes("inv", s.inv, sizeof(s.inv));
@@ -396,7 +424,7 @@ class GameFish : public Game {
   // ------------------------------------------------------------------ ловля
   uint8_t pickFish(bool boatMode) {
     // Идём от самых редких: проверяем шанс = luck * 100 / rarity
-    float luck = totalLuck() * (boatMode ? 0.85f : 1.0f);
+    float luck = boatMode ? totalBoatLuck() : totalLuck();
     for (int i = FISH_COUNT - 1; i >= 0; i--) {
       const FishDef& f = kFish[i];
       if (f.zone > s.zone) continue;
@@ -487,8 +515,22 @@ class GameFish : public Game {
     }
   }
 
-  void tab1(Ev e, uint32_t now) {
+  void tab1(Ev e, uint32_t /*now*/) {
     uint8_t idx = (uint8_t)vpage;
+    if (idx == kBoatCount) {                    // страница «удача лодок»
+      if (e != EV_SELECT) return;
+      if (s.boatLuck >= kRodMax) { ui::notice("Удача лодок максимальна", 1200); return; }
+      uint32_t cost = boatLuckCost(s.boatLuck);
+      if (s.money < cost) { needMoney(cost - (uint32_t)s.money); return; }
+      s.money -= cost;
+      s.boatLuck++;
+      ui::beep(2400, 20);
+      char buf[48];
+      snprintf(buf, sizeof(buf), "Удача лодок x%.2f", boatQuality());
+      ui::notice(buf, 1200);
+      save();
+      return;
+    }
     if (idx >= kBoatCount) idx = 0;
     if (e == EV_SELECT) {
       bool owned = s.boats & (1 << idx);
@@ -717,7 +759,7 @@ class GameFish : public Game {
 
     // ---------- пойманная рыба ----------
     if (s.fishPhase == 4) {
-      const Bmp& im = fishSprites[kFish[s.caught].sprite];
+      const Bmp& im = fishArt(s.caught);
       int fx = 66;
       int fy = waterY - im.h - 4;
       if (fy < 15) fy = 15;
@@ -743,29 +785,49 @@ class GameFish : public Game {
 
   void drawBoats(Canvas& c, uint32_t now, int8_t vp) {
     uint8_t idx = (uint8_t)vp;
+    if (idx == kBoatCount) {                    // прокачка удачи лодок
+      char buf[48], cost[20];
+      topBar(c, "УДАЧА", 1);
+      c.bitmap(70, 13, bmpTheirBoat, BMP_MASK);
+      snprintf(buf, sizeof(buf), "ур. %u/%u", s.boatLuck, kRodMax);
+      c.text(2, 15, buf, font_small, 1);
+      ui::progress(c, 2, 25, 62, 8, (float)s.boatLuck / kRodMax);
+      snprintf(buf, sizeof(buf), "удача x%.2f", boatQuality());
+      c.text(2, 36, buf, font_small, 1);
+      if (s.boatLuck < kRodMax) {
+        fmtNum(cost, sizeof(cost), boatLuckCost(s.boatLuck));
+        snprintf(buf, sizeof(buf), "цена %s ₽", cost);
+        c.text(2, 48, buf, font_small, 1);
+        if (ui::blink()) c.textR(126, 48, "ВЫБОР — +", font_small, 1);
+      } else {
+        c.text(2, 48, "максимум", font_small, 1);
+      }
+      (void)now;
+      return;
+    }
     if (idx >= kBoatCount) idx = 0;
-    topBar(c, "ЛОДКИ", 1);
+    char hdr[24];
+    snprintf(hdr, sizeof(hdr), "ЛОДКИ %u/%u", idx + 1, kBoatCount);
+    topBar(c, hdr, 1);
     bool owned = s.boats & (1 << idx);
     const BoatDef& b = kBoat[idx];
-    char buf[64], pg[16];
+    char buf[64];
 
-    const char* st = owned ? (idx == s.activeBoat ? "АКТИВНА" : "КУПЛЕНА") : "НЕ КУПЛЕНА";
-    c.text(2, 15, st, font_small, 1);
-    snprintf(pg, sizeof(pg), "%u/%u", idx + 1, kBoatCount);
-    c.textR(126, 15, pg, font_small, 1);
+    // арт автора (судно 58x37) слева, характеристики справа
+    const Bmp& bm = (idx == 0) ? bmpTheirBoat
+                              : ((b.sprite < boatSpriteCount) ? boatSprites[b.sprite] : boatSprites[0]);
+    int by = 26 - bm.h / 2;
+    if (by < 14) by = 14;
+    c.bitmap(2, by, bm, BMP_COPY);
+    for (int x = 0; x < bm.w; x += 4) c.px(2 + x + ((x / 4) % 2), by + bm.h + 1, 1);
 
-    // лодка на воде, по центру
-    const Bmp& bm = (b.sprite < boatSpriteCount) ? boatSprites[b.sprite] : boatSprites[0];
-    int bx = (128 - bm.w) / 2 + (int)((now / 140) % 4) - 2;
-    c.bitmap(bx, 13, bm, BMP_COPY);
-    for (int x = 0; x < 128; x += 4) c.px(x + ((x / 4) % 2), 13 + bm.h + 1, 1);
-
-    // подпись под лодкой
     char nm[40];
     c.copyFit(nm, sizeof(nm), b.name, font_small, 60);
-    c.text(2, 40, nm, font_small, 1);
-    snprintf(buf, sizeof(buf), "x%.1f · %u/тик", b.luck, b.amount);
-    c.textR(126, 40, buf, font_small, 1);
+    c.text(64, 15, nm, font_small, 1);
+    snprintf(buf, sizeof(buf), "удача x%.1f", b.luck);
+    c.text(64, 27, buf, font_small, 1);
+    snprintf(buf, sizeof(buf), "%u рыб/тик", b.amount);
+    c.text(64, 38, buf, font_small, 1);
 
     if (!owned) {
       char money[20];
@@ -774,17 +836,18 @@ class GameFish : public Game {
       c.text(2, 52, buf, font_small, 1);
       if (ui::blink(900)) c.textR(126, 52, "ВЫБОР — купить", font_small, 1);
     } else if (idx == s.activeBoat) {
-      c.text(2, 52, "рыбачит прямо сейчас", font_small, 1);
+      c.text(2, 52, "рыбачит сейчас", font_small, 1);
     } else if (ui::blink(900)) {
       c.text(2, 52, "ВЫБОР — активировать", font_small, 1);
     } else {
-      c.text(2, 52, "лодка ждёт в доке", font_small, 1);
+      c.text(2, 52, "лодка в доке", font_small, 1);
     }
     (void)now;
   }
 
   void drawFridge(Canvas& c, uint32_t now) {
     topBar(c, "ХОЛОД.", 2);
+    c.bitmap(98, 14, bmpTheirFridge, BMP_MASK);
     char buf[64], val[20];
     fmtNum(val, sizeof(val), invValue());
 
@@ -937,19 +1000,19 @@ class GameFish : public Game {
     fmtNum(b, sizeof(b), s.money);
     snprintf(line, sizeof(line), "Баланс: %s ₽", b);
     c.text(2, 15, line, font_small, 1);
-    snprintf(line, sizeof(line), "Рыбы: %u · выловлено: %lu", invTotal(), (unsigned long)s.totalCaught);
+    snprintf(line, sizeof(line), "Рыбы: %u · всего: %lu", invTotal(), (unsigned long)s.totalCaught);
     c.text(2, 25, line, font_small, 1);
     snprintf(line, sizeof(line), "Удочка %u · %s", s.rod, kZone[s.zone].name);
     c.text(2, 35, line, font_small, 1);
     // эффекты
     uint32_t now = gbMillis();
     int x = 2;
-    if (s.effUntil[0] > now) { snprintf(line, sizeof(line), "СК x%.1f", s.effHaste); c.text(x, 46, line, font_small, 1); x += 40; }
-    if (s.effUntil[1] > now) { snprintf(line, sizeof(line), "УД x%.1f", s.effLuck); c.text(x, 46, line, font_small, 1); x += 40; }
-    if (s.effUntil[2] > now) { snprintf(line, sizeof(line), "ПР x%.1f", s.effSell); c.text(x, 46, line, font_small, 1); }
-    if (x == 2) c.text(2, 46, "Эффектов нет", font_small, 1);
+    if (s.effUntil[0] > now) { snprintf(line, sizeof(line), "СК x%.1f", s.effHaste); c.text(x, 43, line, font_small, 1); x += 40; }
+    if (s.effUntil[1] > now) { snprintf(line, sizeof(line), "УД x%.1f", s.effLuck); c.text(x, 43, line, font_small, 1); x += 40; }
+    if (s.effUntil[2] > now) { snprintf(line, sizeof(line), "ПР x%.1f", s.effSell); c.text(x, 43, line, font_small, 1); }
+    if (x == 2) c.text(2, 43, "Эффектов нет", font_small, 1);
     snprintf(line, sizeof(line), "Звание: %s", s.prestige ? kPrestigeTitle[s.prestige] : "—");
-    c.text(2, 52, line, font_small, 1);
+    c.text(2, 54, line, font_small, 1);
   }
 };
 

@@ -13,6 +13,7 @@
 #include "../core/ui.h"
 #include "../core/storage.h"
 #include "../gfx/gfx.h"
+#include "../gfx/gfx_their.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -20,23 +21,64 @@ namespace {
 
 struct SkillDef { const char* name; float weight; uint8_t sprite; };
 const uint8_t kSkills = 5;
+// Навыки — как в SPTS: сила удара, прочность тела, психика, скорость, прыжок
 const SkillDef kSkill[kSkills] = {
-  {"Кулак",    1.00f, 0},
-  {"Тело",     1.25f, 1},
-  {"Скорость", 0.85f, 2},
-  {"Прыжок",   0.75f, 3},
-  {"Психика",  1.60f, 4},
+  {"Сила удара", 1.00f, 0},
+  {"Прочность",  1.25f, 1},
+  {"Психика",    1.60f, 4},
+  {"Скорость",   0.85f, 2},
+  {"Прыжок",     0.75f, 3},
 };
 
-struct ZoneDef { const char* name; double needPower; float mult; uint8_t sprite; };
-const uint8_t kZones = 6;
-const ZoneDef kZone[kZones] = {
-  {"Пустырь",    0,      1.0f,  0},
-  {"Спортзал",   100,    2.5f,  1},
-  {"Кратер",     5000,   7.0f,  2},
-  {"Ледник",     250000, 20.0f, 3},
-  {"Пекло",      2e7,    60.0f, 4},
-  {"Бездна",     5e9,    200.0f,5},
+// Зоны тренировки: списки взяты из game_spts.cpp автора (порядок и названия
+// его). Каждая зона качает РОВНО один навык, следующая зона того же навыка
+// даёт вдвое больше (множитель 2^n — формула SPTS).
+struct SZoneDef { const char* name; };
+const SZoneDef kZonesFist[] = {
+  {"Мешок"}, {"Лес"}, {"Стальной столб"}, {"Скала"}, {"Кристалл"},
+  {"Синяя звезда"}, {"Токсичная планета"}, {"Магмовая планета"}, {"Багровые кристаллы"},
+  {"Молния"}, {"Чёрная дыра"}, {"Стадион драконов"}, {"Меч"}, {"Клетка"},
+  {"Верховная планета"}, {"Скопление пустоты"}, {"Ядро зла"}, {"Бесконечная пустота"},
+  {"Элементарный метеор"}, {"Небесный пояс"},
+};
+const SZoneDef kZonesBody[] = {
+  {"Холодный душ"}, {"Ледяная ванна"}, {"Огненная ванна"}, {"Айсберг"}, {"Торнадо"},
+  {"Вулкан"}, {"Адская яма"}, {"Кислотный бассейн"}, {"Грузовой отсек"}, {"ЛЭП"},
+  {"Радиоактивный разлив"}, {"Сжатая материя"}, {"Логово Ктулху"}, {"Кугельблиц"},
+  {"Внутренний вулкан"}, {"Ядро преисподней"}, {"Заражённый ил"}, {"Вирус порчи"},
+  {"Луч душ"}, {"Разлом пустоты"}, {"Ультимативный торнадо"}, {"Сингулярность"},
+  {"Двойные звёзды"}, {"Вспышка сверхновой"}, {"Виртуальная пустота"},
+  {"Слияние звёзд"}, {"Остров творца"}, {"Внешняя тьма"},
+};
+const SZoneDef kZonesPsy[] = {
+  {"Медитация"}, {"Лужайка"}, {"Мост"}, {"Водопад"}, {"Ядро храма"},
+  {"Эксперимент"}, {"Жизненная аллея"}, {"Крылья дракона"}, {"Некротический айсберг"},
+  {"Надзиратель порчи"}, {"Глитч-звезда"}, {"Звезда авроры"}, {"Золотая звезда"},
+  {"Синергия"}, {"Галактические жеоды"}, {"Божественный меч"}, {"Искажённое измерение"},
+};
+const SZoneDef kZonesSpeed[] = {
+  {"Беговая дорожка"}, {"100 ФУНТОВ"}, {"1 ТОННА"}, {"10 ТОНН"}, {"100 ТОНН"},
+  {"1К ТОНН"}, {"10К ТОНН"}, {"100К ТОНН"}, {"1М ТОНН"}, {"10М ТОНН"},
+  {"1МЛРД ТОНН"}, {"100МЛРД ТОНН"}, {"10ТРЛН ТОНН"}, {"1КВ ТОНН"}, {"100КВ ТОНН"},
+  {"10КВИ ТОНН"}, {"1СЕКС ТОНН"}, {"100СЕКС ТОНН"}, {"10СЕПТ ТОНН"}, {"10ОКТ ТОНН"},
+  {"1НОН ТОНН"},
+};
+const SZoneDef kZonesJump[] = {
+  {"Скакалка"}, {"1 пружина"}, {"10 пружин"}, {"100 пружин"}, {"1К пружин"},
+  {"10К пружин"}, {"100К пружин"}, {"1М пружин"}, {"10М пружин"}, {"1МЛРД пружин"},
+  {"100МЛРД пружин"}, {"10ТРЛН пружин"}, {"1КВ пружин"}, {"100КВ пружин"},
+  {"10КВИ пружин"}, {"1СЕКС пружин"}, {"100СЕКС пружин"}, {"10СЕПТ пружин"},
+  {"10ОКТ пружин"}, {"1НОН пружин"},
+};
+
+// Таблица «зоны одного навыка»: указатель + количество
+struct ZoneSet { const SZoneDef* z; uint8_t n; };
+const ZoneSet kZoneSet[kSkills] = {
+  { kZonesFist,  sizeof(kZonesFist) / sizeof(SZoneDef) },
+  { kZonesBody,  sizeof(kZonesBody) / sizeof(SZoneDef) },
+  { kZonesPsy,   sizeof(kZonesPsy) / sizeof(SZoneDef) },
+  { kZonesSpeed, sizeof(kZonesSpeed) / sizeof(SZoneDef) },
+  { kZonesJump,  sizeof(kZonesJump) / sizeof(SZoneDef) },
 };
 
 struct BotDef { const char* name; double power; uint32_t reward; };
@@ -51,8 +93,8 @@ const BotDef kBot[kBots] = {
 
 struct SptsState {
   double xp[kSkills];
-  uint8_t zone = 0;         // текущая зона тренировки
-  uint8_t unlocked = 0;     // открыто зон (индекс последней)
+  uint8_t zskill = 0;       // навык текущей зоны
+  uint8_t ztier = 0;        // номер зоны внутри навыка (0..)
   uint8_t mult[kSkills];    // уровень множителя
   uint32_t tokens = 0;
   uint32_t statFights = 0, statWins = 0;
@@ -68,6 +110,9 @@ struct SptsState {
   uint32_t lastTrain = 0;
   uint32_t burstReady = 0;
   uint8_t skillSel = 0;
+  uint8_t zoneCat = 0;      // выбранная категория зон (навык)
+  bool catMenu = false;     // меню выбора категории, как у зелий в рыбалке
+  uint8_t catSel = 0;
 };
 
 Store sptsStore("gb_spts");
@@ -76,6 +121,7 @@ class GameSpts : public Game {
  public:
   const char* title() const override { return "SPTS: тренировка силы"; }
   const char* shortName() const override { return "SPTS"; }
+  const Bmp* cover() const override { return &bmpTheirMenu3; }
   const Bmp& banner() const override { return bmpBannerSpts; }
   uint8_t tabs() const override { return 5; }
   const char* tabName(uint8_t t) const override {
@@ -84,7 +130,7 @@ class GameSpts : public Game {
   }
   uint8_t vpages(uint8_t t) const override {
     if (t == 0 || t == 3) return kSkills;
-    if (t == 1) return kZones;
+    if (t == 1) return kZoneSet[s.zoneCat].n;
     if (t == 2) return kBots;
     return 1;
   }
@@ -97,6 +143,15 @@ class GameSpts : public Game {
   void leave() override { save(); }
 
   void onEvent(Ev e, uint32_t now) override {
+    // меню категорий зон — как переключение категорий зелий в рыбалке
+    if (s.catMenu) {
+      if (e == EV_DOWN && s.catSel + 1 < kSkills) s.catSel++;
+      else if (e == EV_UP && s.catSel > 0) s.catSel--;
+      else if (e == EV_SELECT) { s.zoneCat = s.catSel; s.catMenu = false; vpage = 0; }
+      else if (e == EV_BACK || e == EV_STICK) s.catMenu = false;
+      return;
+    }
+    if (e == EV_STICK && tab == 1) { s.catMenu = true; s.catSel = s.zoneCat; return; }
     switch (tab) {
       case 0: tab0(e, now); break;
       case 1: tab1(e, now); break;
@@ -109,9 +164,8 @@ class GameSpts : public Game {
   void update(uint32_t dt, uint32_t now) override {
     // автотренировка идёт, пока открыта вкладка «Тренировка»
     if (tab == 0 && s.battlePhase != 1) {
-      double rate = kZone[s.zone].mult * (1.0 + s.mult[s.skillSel] * 0.5);
-      double add = rate * (dt / 1000.0);
-      s.xp[s.skillSel] += add;
+      double add = trainRate() * (dt / 1000.0);
+      s.xp[s.zskill] += add;
       s.statPowerEarned += add;
     }
     if (s.battlePhase == 1 && now - s.battleStart > 2600) {
@@ -125,12 +179,6 @@ class GameSpts : public Game {
       }
     }
     if (s.battlePhase == 2 && now - s.battleStart > 5200) s.battlePhase = 0;
-    // разблокировка зон по силе
-    while (s.unlocked + 1 < kZones && power() >= kZone[s.unlocked + 1].needPower) {
-      s.unlocked++;
-      ui::notice("Новая зона тренировки!", 1500);
-      save();
-    }
   }
 
   void draw(Canvas& c, uint32_t now, int8_t t, int8_t vp) override {
@@ -142,6 +190,7 @@ class GameSpts : public Game {
       case 3: drawShop(c, now, vp); break;
       default: drawStats(c); break;
     }
+    if (s.catMenu) drawCatMenu(c);
     ui::noticeDraw(c);
   }
 
@@ -156,11 +205,15 @@ class GameSpts : public Game {
       "рывок (мгновенный\n"
       "прирост).\n\n"
       "ЗОНЫ\n"
-      "Вверх/вниз — зона, ВЫБОР —\n"
-      "тренироваться здесь. Чем\n"
-      "выше зона, тем больше силы\n"
-      "за секунду. Зоны\n"
-      "открываются по силе.\n\n"
+      "СТИК — категория навыка\n"
+      "(как зелья в рыбалке),\n"
+      "вверх/вниз — зона, ВЫБОР —\n"
+      "тренироваться здесь.\n"
+      "Каждая зона качает только\n"
+      "свой навык, следующая\n"
+      "даёт вдвое больше (2^n),\n"
+      "а открывается нужным\n"
+      "уровнем этого навыка.\n\n"
       "АРЕНА\n"
       "Вверх/вниз — бот, ВЫБОР —\n"
       "автобой. Победа даёт очки.\n\n"
@@ -174,6 +227,22 @@ class GameSpts : public Game {
 
  private:
   SptsState s;
+
+  // ---------- зоны ----------
+  static double zoneReq(uint8_t tier) {          // нужный уровень навыка
+    return 2.0 + 4.0 * tier + (double)tier * tier;
+  }
+  static double zoneBoost(uint8_t tier) {        // множитель 2^n (формула SPTS)
+    return (double)(1UL << (tier > 20 ? 20 : tier));
+  }
+  const SZoneDef& curZone() const {
+    const ZoneSet& zs = kZoneSet[s.zskill < kSkills ? s.zskill : 0];
+    uint8_t t = s.ztier < zs.n ? s.ztier : (uint8_t)(zs.n - 1);
+    return zs.z[t];
+  }
+  double trainRate() const {                      // сила в секунду в текущей зоне
+    return zoneBoost(s.ztier) * 0.5 * (1.0 + s.mult[s.zskill] * 0.5);
+  }
 
   double power() const {
     double p = 0;
@@ -198,20 +267,24 @@ class GameSpts : public Game {
 
   void load() {
     sptsStore.getBytes("xp", s.xp, sizeof(s.xp));
-    s.zone = sptsStore.getU8("zone", 0);
-    s.unlocked = sptsStore.getU8("unl", 0);
+    s.zskill = sptsStore.getU8("zsk", 0);
+    s.ztier = sptsStore.getU8("ztr", 0);
+    s.zoneCat = sptsStore.getU8("zcat", 0);
     sptsStore.getBytes("mult", s.mult, sizeof(s.mult));
     s.tokens = sptsStore.getU32("tok", 0);
     s.statFights = sptsStore.getU32("f", 0);
     s.statWins = sptsStore.getU32("w", 0);
     s.statPowerEarned = sptsStore.getF("pe", 0);
-    if (s.zone > s.unlocked) s.zone = s.unlocked;
+    if (s.zskill >= kSkills) s.zskill = 0;
+    if (s.zoneCat >= kSkills) s.zoneCat = 0;
+    if (s.ztier >= kZoneSet[s.zskill].n) s.ztier = (uint8_t)(kZoneSet[s.zskill].n - 1);
   }
 
   void save() {
     sptsStore.setBytes("xp", s.xp, sizeof(s.xp));
-    sptsStore.setU8("zone", s.zone);
-    sptsStore.setU8("unl", s.unlocked);
+    sptsStore.setU8("zsk", s.zskill);
+    sptsStore.setU8("ztr", s.ztier);
+    sptsStore.setU8("zcat", s.zoneCat);
     sptsStore.setBytes("mult", s.mult, sizeof(s.mult));
     sptsStore.setU32("tok", s.tokens);
     sptsStore.setU32("f", s.statFights);
@@ -226,23 +299,32 @@ class GameSpts : public Game {
         ui::notice("Рывок ещё не готов", 900);
         return;
       }
-      double add = kZone[s.zone].mult * 25.0 * (1.0 + s.mult[s.skillSel] * 0.5);
-      s.xp[s.skillSel] += add;
+      double add = zoneBoost(s.ztier) * 25.0 * (1.0 + s.mult[s.zskill] * 0.5);
+      s.xp[s.zskill] += add;
       s.statPowerEarned += add;
       s.burstReady = now + 2500;
       ui::beep(2400, 20);
     }
   }
 
-  void tab1(Ev /*e*/, uint32_t /*now*/) {
-    uint8_t z = (uint8_t)vpage;
-    if (z <= s.unlocked) {
-      s.zone = z;
-      char buf[40];
-      snprintf(buf, sizeof(buf), "Зона: %s", kZone[z].name);
-      ui::notice(buf, 900);
-      save();
+  void tab1(Ev e, uint32_t /*now*/) {
+    if (e != EV_SELECT) return;
+    const ZoneSet& zs = kZoneSet[s.zoneCat];
+    uint8_t t = (uint8_t)vpage;
+    if (t >= zs.n) return;
+    if (level(s.zoneCat) < zoneReq(t)) {
+      char buf[48];
+      snprintf(buf, sizeof(buf), "Нужен уровень %.0f", zoneReq(t));
+      ui::notice(buf, 1400);
+      return;
     }
+    s.zskill = s.zoneCat;
+    s.ztier = t;
+    char buf[48];
+    snprintf(buf, sizeof(buf), "Зона: %s", zs.z[t].name);
+    ui::notice(buf, 1100);
+    ui::beep(2600, 25);
+    save();
   }
 
   void tab2(Ev e, uint32_t now) {
@@ -314,7 +396,11 @@ class GameSpts : public Game {
     c.text(32, 31, buf, font_small, 1);
     ui::progress(c, 2, 42, 124, 6, (float)(lv - floor(lv)));
 
-    snprintf(buf, sizeof(buf), "%s x%.1f/с", kZone[s.zone].name, kZone[s.zone].mult);
+    {
+      char zn[32];
+      c.copyFit(zn, sizeof(zn), curZone().name, font_small, 62);
+      snprintf(buf, sizeof(buf), "%s x%.0f/с", zn, trainRate());
+    }
     c.text(2, 52, buf, font_small, 1);
     if (now < s.burstReady) {
       char t[16];
@@ -326,25 +412,45 @@ class GameSpts : public Game {
   }
 
   void drawZones(Canvas& c, uint32_t /*now*/, int8_t vp) {
+    const ZoneSet& zs = kZoneSet[s.zoneCat];
     uint8_t z = (uint8_t)vp;
-    if (z >= kZones) z = 0;
-    topBar(c, "ЗОНЫ", 1);
-    char buf[48], n[20], pg[16];
-    snprintf(pg, sizeof(pg), "%u/%u", z + 1, kZones);
-    c.textR(126, 13, pg, font_small, 1);
-    c.bitmap(82, 14, spsZoneSprites[kZone[z].sprite], BMP_COPY);
-    nameFit(c, 2, 14, kZone[z].name, 76, 1);
-    snprintf(buf, sizeof(buf), "скорость x%.2f", kZone[z].mult);
-    c.text(2, 29, buf, font_small, 1);
-    if (z <= s.unlocked) {
-      c.text(2, 40, z == s.zone ? "Тренируемся здесь" : "Зона открыта", font_small, 1);
-      if (z != s.zone && ui::blink(900)) c.text(2, 52, "ВЫБОР — перейти", font_small, 1);
+    if (z >= zs.n) z = 0;
+    char buf[64], hdr[20];
+    snprintf(hdr, sizeof(hdr), "ЗОНЫ %u/%u", z + 1, zs.n);
+    topBar(c, hdr, 1);
+
+    double lv = level(s.zoneCat);
+    bool open = lv >= zoneReq(z);
+    c.bitmap(84, 14, spsSkillSprites[kSkill[s.zoneCat].sprite], BMP_COPY);
+    if (!open) c.bitmap(94, 18, bmpTheirLock, BMP_MASK);   // замок автора
+
+    c.text(2, 14, kSkill[s.zoneCat].name, font_small, 1);  // навык этой зоны
+    nameFit(c, 2, 25, zs.z[z].name, 78, 1);
+    snprintf(buf, sizeof(buf), "множитель x%.0f", zoneBoost(z));
+    c.text(2, 40, buf, font_small, 1);
+    if (open) {
+      if (s.zskill == s.zoneCat && s.ztier == z) c.text(2, 52, "Тренируемся здесь", font_small, 1);
+      else if (ui::blink(900)) c.text(2, 52, "ВЫБОР — тренироваться", font_small, 1);
     } else {
-      fmtNum(n, sizeof(n), kZone[z].needPower);
-      snprintf(buf, sizeof(buf), "Нужна сила %s", n);
-      c.text(2, 40, buf, font_small, 1);
-      c.text(2, 52, "Зона закрыта", font_small, 1);
+      snprintf(buf, sizeof(buf), "нужен ур. %.0f (есть %.0f)", zoneReq(z), lv);
+      c.text(2, 52, buf, font_small, 1);
     }
+  }
+
+  void drawCatMenu(Canvas& c) {
+    c.clear();
+    c.text(2, 1, "КАТЕГОРИЯ ЗОН", font_small, 1);
+    ui::separator(c, 12);
+    for (uint8_t i = 0; i < kSkills; i++) {
+      int y = 15 + i * 9;
+      bool sel = (i == s.catSel);
+      if (sel) c.fillRect(0, y - 1, 128, 9, 1);
+      c.text(3, y, kSkill[i].name, font_small, sel ? 0 : 1);
+      char b[24];
+      snprintf(b, sizeof(b), "x%.0f", zoneBoost(0));
+      (void)b;
+    }
+    if (ui::blink(700)) c.textR(126, 56, "СТИК/НАЗАД — закрыть", font_small, 1);
   }
 
   void drawArena(Canvas& c, uint32_t now, int8_t vp) {

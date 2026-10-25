@@ -17,6 +17,8 @@ class Game {
   virtual const char* title() const = 0;        // полное название
   virtual const char* shortName() const = 0;    // для шапки
   virtual const Bmp& banner() const = 0;        // баннер 128x32
+  // Обложка для карусели игр (128x46, арт автора). nullptr — рисуем баннер.
+  virtual const Bmp* cover() const { return nullptr; }
   virtual uint8_t tabs() const = 0;             // количество горизонтальных страниц
   virtual const char* tabName(uint8_t tab) const = 0;
   virtual uint8_t vpages(uint8_t tab) const { (void)tab; return 1; }

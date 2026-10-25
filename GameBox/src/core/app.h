@@ -52,7 +52,10 @@ class App {
   uint8_t setFirst = 0;        // первая видимая строка
   uint8_t setPage = 0;         // 0 = список, 1 = текст, 2 = список игр
   uint8_t setGame = 0;
-  int16_t textScroll = 0;
+  int16_t textFirst = 0;      // первая видимая строка длинного текста
+  float   textScrollY = 0;    // плавное смещение прокрутки в пикселях
+  uint32_t textScrollStart = 0;
+  float   textScrollFrom = 0;
   const char* textTitle = nullptr;
   const char* textBody = nullptr;
 

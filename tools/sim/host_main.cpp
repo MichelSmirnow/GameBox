@@ -174,10 +174,18 @@ int main(int argc, char** argv) {
   frames(4, 40); shot("fish_bite");
   send(EV_SELECT); frames(4, 40); shot("fish_caught");
   send(EV_RIGHT); frames(14, 40); shot("fish_boats");
+  for (int i = 0; i < 8; i++) send(EV_DOWN);
+  frames(14, 40); shot("fish_boat_luck");
+  for (int i = 0; i < 8; i++) send(EV_DOWN);
+  frames(12, 40); shot("fish_boat_luck_upgrade");
+  for (int i = 0; i < 16; i++) send(EV_UP);
+  frames(10, 40);
   send(EV_RIGHT); frames(14, 40); shot("fish_fridge");
   send(EV_RIGHT); frames(14, 40); shot("fish_potions");
   send(EV_STICK); frames(10, 40); shot("fish_potions_categories");
   send(EV_BACK); frames(8, 40);
+  send(EV_RESET); frames(8, 40); shot("fish_board");
+  send(EV_RESET); frames(8, 40);
   send(EV_RIGHT); frames(14, 40); shot("fish_zones");
   send(EV_RIGHT); frames(14, 40); shot("fish_prestige");
   for (int i = 0; i < 5; i++) send(EV_BACK);
@@ -193,6 +201,11 @@ int main(int argc, char** argv) {
   send(EV_SELECT); frames(8, 40); shot("spts_burst_notice");
   send(EV_RIGHT); frames(14, 40); shot("spts_zones");
   send(EV_DOWN); frames(10, 40); shot("spts_zone_locked");
+  send(EV_STICK); frames(10, 40); shot("spts_zone_categories");
+  send(EV_DOWN); frames(6, 40);
+  send(EV_SELECT); frames(10, 40); shot("spts_zones_body");
+  send(EV_DOWN); frames(8, 40); shot("spts_zones_body2");
+  send(EV_SELECT); frames(10, 40); shot("spts_zone_notice");
   send(EV_RIGHT); frames(14, 40); shot("spts_arena");
   send(EV_SELECT); frames(24, 60); shot("spts_battle");
   frames(60, 60); shot("spts_battle_result");
@@ -205,14 +218,22 @@ int main(int argc, char** argv) {
   // ---------------- Buckshot ----------------
   openGame(2, "shot");
   shot("shot_intro");
+  frames(60, 60); shot("shot_intro_bath");
   send(EV_SELECT); frames(10, 40); shot("shot_disclaimer");
-  send(EV_SELECT); frames(6, 40); shot("shot_round1");
-  frames(40, 60); shot("shot_play");
+  send(EV_SELECT); frames(8, 40); shot("shot_round_go");
+  frames(20, 60); shot("shot_round_shells");
+  frames(26, 60); shot("shot_round_lives");
+  frames(26, 60); shot("shot_round_number");
+  frames(26, 60); shot("shot_play");
+  send(EV_SELECT); frames(8, 40); shot("shot_items");
+  send(EV_SELECT); frames(8, 40); shot("shot_item_used");
+  frames(6, 40);
   send(EV_LEFT); frames(4, 40); shot("shot_target_self");
-  send(EV_RIGHT);
-  send(EV_STICK); frames(16, 60); shot("shot_after_shot");
-  for (int i = 0; i < 8; i++) { frames(24, 60); send(EV_STICK); }
-  frames(24, 60); shot("shot_later");
+  send(EV_RIGHT); frames(4, 40);
+  send(EV_STICK); frames(12, 60); shot("shot_fire");
+  frames(22, 60); shot("shot_result");
+  for (int i = 0; i < 10; i++) { frames(26, 60); send(EV_STICK); }
+  frames(26, 60); shot("shot_later");
   exitGame();
 
   // ---------------- RNG ----------------
@@ -222,8 +243,10 @@ int main(int argc, char** argv) {
   frames(8, 30); shot("rng_anim_2");
   frames(30, 40); shot("rng_after");
   send(EV_RIGHT); frames(14, 40); shot("rng_collection");
-  send(EV_RIGHT); frames(14, 40); shot("rng_stats");
+  send(EV_RIGHT); frames(14, 40); shot("rng_potions");
+  send(EV_SELECT); frames(10, 40); shot("rng_potion_used");
   send(EV_RIGHT); frames(14, 40); shot("rng_upgrades");
+  send(EV_RIGHT); frames(14, 40); shot("rng_stats");
   send(EV_BACK); frames(10, 40); exitGame();
 
   // ---------------- Жизнь ----------------

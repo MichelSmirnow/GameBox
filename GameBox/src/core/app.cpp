@@ -195,14 +195,24 @@ void App::drawGames() {
 
   auto drawOne = [&](Canvas& c, uint8_t idx, int dx) {
     Game* g = gameAt(idx);
-    c.bitmap(dx, 0, g->banner(), BMP_COPY);
-    c.hline(dx, 32, 128, 1);
-    // название
-    c.textC(36, g->title(), font_small, 1);
-    char buf[16];
-    snprintf(buf, sizeof(buf), "%u/%u", (unsigned)(idx + 1), (unsigned)n);
-    c.textOutlined(dx + 3, 52, buf, font_small, 1);
-    c.textOutlined(dx + 22, 52, "← → листать · ВЫБОР", font_small, 1);
+    const Bmp* cov = g->cover();
+    if (cov) {
+      int cy = (46 - cov->h) / 2;
+      c.bitmap(dx, cy < 0 ? 0 : cy, *cov, BMP_COPY);
+      c.hline(dx, 46, 128, 1);
+      c.textC(48, g->title(), font_small, 1);
+      char b[16];
+      snprintf(b, sizeof(b), "%u/%u", (unsigned)(idx + 1), (unsigned)n);
+      c.textOutlined(dx + 3, 2, b, font_small, 1);
+    } else {
+      c.bitmap(dx, 0, g->banner(), BMP_COPY);
+      c.hline(dx, 32, 128, 1);
+      c.textC(36, g->title(), font_small, 1);
+      char b[16];
+      snprintf(b, sizeof(b), "%u/%u", (unsigned)(idx + 1), (unsigned)n);
+      c.textOutlined(dx + 3, 52, b, font_small, 1);
+      c.textOutlined(dx + 22, 52, "← → листать · ВЫБОР", font_small, 1);
+    }
   };
 
   if (selDir == 0) {
@@ -221,8 +231,13 @@ void App::drawGames() {
     blit(cv, a, aShift, 0, false);
     blit(cv, b, bShift, 0, true);
   }
-  // мигающий треугольник "игра выбрана"
-  if (ui::blink()) ui::triangle(cv, 119, 58, 1, 4, true);
+  // мигающие треугольники «листать» и «выбрать»
+  if (ui::blink()) {
+    if (gameCount() > 1) {
+      ui::triangle(cv, 4, 58, 3, 4, true);
+      ui::triangle(cv, 119, 58, 1, 4, true);
+    }
+  }
 }
 
 void App::handleGames(Ev e) {
@@ -250,7 +265,7 @@ void App::handleGames(Ev e) {
       confirmBack = SCR_GAMES;
       scr = SCR_SETTINGS;
       setPage = 1;
-      textScroll = 0;
+      textFirst = 0;
       break;
     default: break;
   }
@@ -298,20 +313,48 @@ void App::drawSettings() {
   } else if (setPage == 1) {
     ui::header(cv, textTitle ? textTitle : "");
     if (textBody) {
-      Canvas tmp;
-      tmp.clear();
-      tmp.textWrap(2, 0, 118, textBody, font_small, 1, 64);
-      int contentH = tmp.linesCount(textBody, font_small, 118) * font_small.lineH;
-      int shift = textScroll;
-      if (shift > contentH - 50) shift = contentH - 50;
-      if (shift < 0) shift = 0;
-      for (int y = 13; y < 64; y++)
-        for (int x = 0; x < 124; x++) {
-          int sy = y - 13 + shift;
-          if (sy >= 0) cv.px(x, y, tmp.get(x, sy));
-        }
-      ui::scrollbar(cv, 126, 13, 51, contentH, 50, shift);
-      if (contentH > 50 && ui::blink(900)) ui::triangle(cv, 119, 58, 2, 3, true);
+      // Текст разбиваем на строки и рисуем построчно со смещением:
+      // раньше он верстался в буфер 128x64 и физически обрывался после 5 строк.
+      static char lines[240][80];
+      const int lineH = font_small.lineH;
+      const int areaY = 13, areaH = 51, visible = areaH / lineH;
+      int total = cv.wrapSplit(textBody, font_small, 106, &lines[0][0], 80, 240);
+      int maxFirst = total > visible ? total - visible : 0;
+      if (textFirst > maxFirst) textFirst = maxFirst;
+      if (textFirst < 0) textFirst = 0;
+
+      // плавная прокрутка: цель — textFirst строк
+      float target = (float)textFirst;
+      float elapsed = (float)(now() - textScrollStart);
+      float t = (UI_ANIM_MS > 0) ? elapsed / (float)UI_ANIM_MS : 1.0f;
+      if (t > 1.0f) t = 1.0f;
+      float p = 1.0f - (1.0f - t) * (1.0f - t);          // easeOutQuad
+      float cur = textScrollFrom + (target - textScrollFrom) * p;
+      if (t >= 1.0f) { cur = target; textScrollFrom = target; textScrollY = target; }
+      textScrollY = cur;
+
+      // рисуем в отдельный буфер и переносим под шапку — так строки
+      // обрезаются ровно по границе области, а не посреди глифов
+      static Canvas tmpCanvas;
+      tmpCanvas.clear();
+      int off = (int)(cur * lineH + 0.5f);
+      for (int i = 0; i < total; i++) {
+        int y = i * lineH - off;
+        // рисуем только строки, которые целиком попадают в область:
+        // так ни один глиф не обрезается посередине
+        if (y + font_small.ascent > areaH) break;
+        if (y < 0) continue;
+        char clipped[80];
+        cv.copyFit(clipped, sizeof(clipped), lines[i], font_small, 106);
+        tmpCanvas.text(2, y, clipped, font_small, 1);
+      }
+      blit(cv, tmpCanvas, 0, areaY, true);
+
+      ui::scrollbar(cv, 126, areaY, areaH, total, visible, (int)(cur + 0.5f));
+      if (total > visible && ui::blink(700)) {
+        if (textFirst > 0) ui::triangle(cv, 120, 17, 0, 3, true);
+        if (textFirst < maxFirst) ui::triangle(cv, 120, 57, 2, 3, true);
+      }
     }
   } else if (setPage == 3) {
     ui::header(cv, "СПРАВКА ИГР");
@@ -331,13 +374,16 @@ void App::drawSettings() {
 
 void App::handleSettings(Ev e) {
   if (setPage == 1) {                     // текстовая страница
+    static char tmpLines[220][78];
+    int total = textBody ? cv.wrapSplit(textBody, font_small, 108, &tmpLines[0][0], 78, 220) : 0;
+    int maxFirst = total > 4 ? total - 4 : 0;
     switch (e) {
-      case EV_DOWN: textScroll += font_small.lineH; break;
-      case EV_UP:   textScroll -= font_small.lineH; if (textScroll < 0) textScroll = 0; break;
-      case EV_BACK: setPage = confirmBack == SCR_GAMES ? 0 : 0; textScroll = 0;
+      case EV_DOWN: if (textFirst < maxFirst) { textScrollFrom = textScrollY; textScrollStart = now(); textFirst++; } break;
+      case EV_UP:   if (textFirst > 0) { textScrollFrom = textScrollY; textScrollStart = now(); textFirst--; } break;
+      case EV_BACK: setPage = confirmBack == SCR_GAMES ? 0 : 0; textFirst = 0;
                     if (confirmBack == SCR_GAMES) { scr = SCR_GAMES; }
                     break;
-      case EV_SELECT: setPage = 0; textScroll = 0; if (confirmBack == SCR_GAMES) scr = SCR_GAMES; break;
+      case EV_SELECT: setPage = 0; textFirst = 0; if (confirmBack == SCR_GAMES) scr = SCR_GAMES; break;
       default: break;
     }
     return;
@@ -351,7 +397,7 @@ void App::handleSettings(Ev e) {
         textTitle = gameAt(setGame)->helpTitle();
         textBody = gameAt(setGame)->help();
         setPage = 1;
-        textScroll = 0;
+        textFirst = 0;
         break;
       case EV_BACK: setPage = 0; break;
       default: break;
@@ -366,11 +412,11 @@ void App::handleSettings(Ev e) {
     case EV_DOWN: if (setIdx < 5) setIdx++; break;
     case EV_BACK: scr = SCR_MENU; break;
     case EV_SELECT:
-      if (setIdx == 0) { textTitle = "КНОПКИ"; textBody = kHelpButtons; setPage = 1; textScroll = 0; confirmBack = SCR_SETTINGS; }
-      else if (setIdx == 1) { textTitle = "ДЖОЙСТИК"; textBody = kHelpStick; setPage = 1; textScroll = 0; confirmBack = SCR_SETTINGS; }
+      if (setIdx == 0) { textTitle = "КНОПКИ"; textBody = kHelpButtons; setPage = 1; textFirst = 0; confirmBack = SCR_SETTINGS; }
+      else if (setIdx == 1) { textTitle = "ДЖОЙСТИК"; textBody = kHelpStick; setPage = 1; textFirst = 0; confirmBack = SCR_SETTINGS; }
       else if (setIdx == 2) { setPage = 3; setGame = 0; setFirst = 0; }
       else if (setIdx == 3) { in.recalibrate(); ui::notice("Джойстик откалиброван", 1200); }
-      else if (setIdx == 4) { textTitle = "О ПРИСТАВКЕ"; textBody = kHelpAbout; setPage = 1; textScroll = 0; confirmBack = SCR_SETTINGS; }
+      else if (setIdx == 4) { textTitle = "О ПРИСТАВКЕ"; textBody = kHelpAbout; setPage = 1; textFirst = 0; confirmBack = SCR_SETTINGS; }
       else if (setIdx == 5) {
         confirmText = "Удалить все сохранения\nигр и настроек?";
         confirmAction = 1;

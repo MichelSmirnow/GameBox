@@ -30,27 +30,7 @@ extern const Bmp spsSkillSprites[];
 extern const uint8_t spsSkillCount;
 
 // Buckshot: кадры интро 128x64 и сцены
-extern const Bmp shotIntroFrames[];
-extern const uint8_t shotIntroCount;
-extern const Bmp bmpShotDealer;
-extern const Bmp bmpShotDealerShoot;
-extern const Bmp bmpShotPlayerShoot;
-extern const Bmp bmpShotTable;
-extern const Bmp bmpShotDead;
-extern const Bmp bmpShotLife;
-extern const Bmp bmpShotRounds;
-extern const Bmp bmpShotMoney;
-extern const Bmp bmpShotShellLive;
-extern const Bmp bmpShotShellBlank;
-extern const Bmp bmpShotNight;
-extern const Bmp bmpShotGoRounds;
-extern const Bmp bmpShotDealerGun;
-extern const Bmp bmpShotMagnifier;
-extern const Bmp bmpDisclaimer;
-extern const Bmp bmpShotgun;
 
-// Buckshot: портрет дилера и иконки предметов
-extern const Bmp bmpDealerFace;
 extern const Bmp bmpIconCig;
 extern const Bmp bmpIconMag;
 extern const Bmp bmpIconBeer;

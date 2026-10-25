@@ -77,6 +77,9 @@ class Canvas {
   int  textWrap(int x, int y, int w, const char* s, const Font& f,
                 uint8_t v = 1, int maxLines = 32);
   int  linesCount(const char* s, const Font& f, int w) const;
+  // Разбивает текст на строки по ширине w. Пишет их в out как массив строк
+  // длиной lineCap. Возвращает число строк (до maxLines).
+  int  wrapSplit(const char* s, const Font& f, int w, char* out, int lineCap, int maxLines) const;
   // Копирует строку в out, обрезая её по ширине maxW по границам символов UTF-8
   // (в отличие от "%.12s", который режет многобайтные буквы и даёт "?").
   void copyFit(char* out, int cap, const char* s, const Font& f, int maxW) const;

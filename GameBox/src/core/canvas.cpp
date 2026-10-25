@@ -77,7 +77,7 @@ void Canvas::line(int x0, int y0, int x1, int y1, uint8_t v) {
   while (true) {
     px(x0, y0, v);
     if (x0 == x1 && y0 == y1) break;
-    int e2 = err << 1;
+    int e2 = err * 2;                 // не сдвиг: err бывает отрицательным
     if (e2 > -dy) { err -= dy; x0 += sx; }
     if (e2 < dx)  { err += dx; y0 += sy; }
   }
@@ -398,6 +398,40 @@ void Canvas::copyFit(char* out, int cap, const char* s, const Font& f, int maxW)
     p = q;
   }
   out[n] = 0;
+}
+
+int Canvas::wrapSplit(const char* s, const Font& f, int w, char* out,
+                      int lineCap, int maxLines) const {
+  int line = 0;
+  const char* p = s;
+  while (*p && line < maxLines) {
+    char* dst = out + (size_t)line * (size_t)lineCap;
+    int n = 0, cand = -1, px = 0;
+    const char* q = p;
+    while (*q) {
+      const char* q2 = q;
+      uint16_t cp = utf8Next(q2);
+      if (cp == '\n') break;
+      int bl = (int)(q2 - q);
+      const Glyph* g = findGlyph(f, cp);
+      if (!g) g = findGlyph(f, '?');
+      int adv = g ? g->adv : 4;
+      if (n + bl >= lineCap - 1) break;
+      if (px + adv > w && n > 0) break;
+      for (int k = 0; k < bl; k++) dst[n++] = q[k];
+      if (cp == ' ') cand = n;
+      px += adv;
+      q = q2;
+    }
+    dst[n] = 0;
+    if (*q && *q != '\n' && cand > 0) {     // перенос по последнему пробелу
+      q = p + cand;
+      dst[cand - 1] = 0;                    // пробел на переносе убираем
+    }
+    p = (*q == '\n') ? q + 1 : q;
+    line++;
+  }
+  return line;
 }
 
 int Canvas::linesCount(const char* s, const Font& f, int w) const {

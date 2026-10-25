@@ -83,10 +83,9 @@ def build(name, path, size, thresh):
     # таблица должна быть отсортирована по коду: поиск бинарный
     uniq_sorted = sorted(uniq, key=ord)
     for ch in uniq_sorted:
-        if ch == "₽":
+        rows, w, h, xoff, top = render(path, size, ch)
+        if ch == "₽" and (w == 0 or h == 0):      # в старых DejaVu знака нет
             rows, w, h, xoff, top = render_ruble(path, size)
-        else:
-            rows, w, h, xoff, top = render(path, size, ch)
         adv = max(1, int(round(f.getlength(ch))))
         if w == 0 or h == 0:
             glyphs.append((ord(ch), 0, 0, 0, 0, adv, len(blob), 0))
