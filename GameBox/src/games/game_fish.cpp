@@ -847,40 +847,57 @@ class GameFish : public Game {
 
   void drawFridge(Canvas& c, uint32_t now) {
     topBar(c, "ХОЛОД.", 2);
-    c.bitmap(98, 14, bmpTheirFridge, BMP_MASK);
     char buf[64], val[20];
     fmtNum(val, sizeof(val), invValue());
 
     if (invTotal() == 0) {
-      c.textC(22, "Пусто", font_big, 1);
-      c.textC(42, "Забросьте удочку —", font_small, 1);
-      c.textC(52, "рыба сама придёт.", font_small, 1);
+      c.bitmap(70, 16, bmpTheirFridge, BMP_MASK);
+      c.text(2, 22, "Пусто", font_big, 1);
+      c.text(2, 42, "Забросьте", font_small, 1);
+      c.text(2, 52, "удочку.", font_small, 1);
       return;
     }
     // шапка: сумма
     snprintf(buf, sizeof(buf), "Всего %u · %s ₽", invTotal(), val);
     c.text(2, 13, buf, font_small, 1);
 
-    uint8_t lastIdx = 0;
-    for (uint8_t i = 0; i < FISH_COUNT; i++) if (s.inv[i]) lastIdx = i;
+    uint8_t lastIdx = 0, kinds = 0;
+    for (uint8_t i = 0; i < FISH_COUNT; i++) {
+      if (!s.inv[i]) continue;
+      lastIdx = i;
+      kinds++;
+    }
     if (fridgeSel > lastIdx) fridgeSel = lastIdx;
-    uint8_t first = (fridgeSel > 2) ? (uint8_t)(fridgeSel - 2) : 0;
+    if (!s.inv[fridgeSel]) {
+      for (uint8_t i = 0; i < FISH_COUNT; i++) if (s.inv[i]) { fridgeSel = i; break; }
+    }
+    uint8_t first = (fridgeSel > 1) ? (uint8_t)(fridgeSel - 1) : 0;
     int y = 25;
     uint8_t shown = 0;
-    for (uint8_t i = first; i < FISH_COUNT && shown < 3; i++) {
+    for (uint8_t i = first; i < FISH_COUNT && shown < 2; i++) {
       if (!s.inv[i]) continue;
       bool sel = (i == fridgeSel);
       if (sel) c.fillRoundRect(1, y - 1, 126, 12, 3, 1);
-      c.text(4, y + 1, kFish[i].name, font_small, sel ? 0 : 1);
-      char pr[20], cnt[10];
+      char nm[40], pr[20];
+      c.copyFit(nm, sizeof(nm), kFish[i].name, font_small, 62);
+      c.text(4, y + 1, nm, font_small, sel ? 0 : 1);
       fmtNum(pr, sizeof(pr), fishPrice(i));
-      snprintf(cnt, sizeof(cnt), "x%u", s.inv[i]);
-      c.textR(104, y + 1, pr, font_small, sel ? 0 : 1);
-      c.textR(124, y + 1, cnt, font_small, sel ? 0 : 1);
+      snprintf(buf, sizeof(buf), "%s ₽", pr);
+      c.textR(104, y + 1, buf, font_small, sel ? 0 : 1);
       y += 12;
       shown++;
     }
     if (shown == 0) c.text(2, 30, "Нет подходящей рыбы", font_small, 1);
+
+    // полоса: арт выбранной рыбы + сколько её в холодильнике
+    const Bmp& im = fishArt(fridgeSel);
+    int ax = 126 - im.w;
+    for (int x = 2; x < ax - 4; x += 3) c.px(x, 49, 1);
+    c.bitmap(ax, 51, im, BMP_COPY);
+    snprintf(buf, sizeof(buf), "в холод. ×%u", s.inv[fridgeSel]);
+    c.text(2, 52, buf, font_small, 1);
+
+    if (kinds > 2) ui::scrollbar(c, 125, 25, 22, kinds, 2, first);
     // подсказка занимает строку шапки на втором такте мигания
     if (ui::blink(2400)) {
       c.fillRect(0, 13, 128, 12, 0);
